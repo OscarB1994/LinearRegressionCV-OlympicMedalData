@@ -1,0 +1,335 @@
+---
+title: "Medal Data Regression"
+author: "Oscar Brooks (200869163)"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries and Import
+```{r warning=FALSE, message=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(ggrepel)
+library(kableExtra)
+```
+```{r warning=FALSE, message=FALSE}
+medal_data = read_csv('medal_data_statlearn.csv')
+```
+
+
+
+## Part 1: Regression
+
+## Task 1: Perform a linear regression to predict the medal count in 2008 and 2012 (separately, in two regressions) from Population and GDP and report your results.
+
+With the medal_data variable stored we can apply the $\textbf{glm()}$ command to create a linear regression model for the medal counts for both 2008 and 2012 from both GDP and population.
+
+```{r}
+Medal_model08 = glm(Medal2008 ~ GDP + Population, data = medal_data)
+summary08 = summary(Medal_model08)
+summary08
+```
+
+
+```{r}
+Medal_model12 =glm(Medal2012~GDP + Population, data = medal_data)
+summary12 = summary(Medal_model12)
+summary12
+```
+
+Having created our models, viewing the $\textbf{summary()}$ of each model we can see the deviance in residuals the upper and lower quartiles are normally distributed about their medians. Each model has produced a similar regression with every summary value almost the same across the two. In both cases the coefficent estimate for GDP has a much larger (six orders of magnitude) effect on medals won in comparison the estimate for the population's coefficient; GDP's more probable influence over medals is further evidenced in the final column for coefficients where we can see the Pr(>|t|) is much higher for population than GDP.
+
+\newpage
+
+## Task 2: How consistent are the effects of Population and GDP over time?
+
+```{r}
+zcon = qnorm(0.975)
+estimategdp08 = summary(Medal_model08)$coefficients[2,1]
+standard_errorgdp08 = summary(Medal_model08)$coefficients[2,2]
+cigdp08 = estimategdp08 + c(-1,0, 1)*zcon*standard_errorgdp08
+
+estimatepop08 = summary(Medal_model08)$coefficients[3,1]
+standard_errorpop08 = summary(Medal_model08)$coefficients[3,2]
+cipop08 = estimatepop08 + c(-1,0, 1)*zcon*standard_errorpop08
+
+estimategdp12 = summary(Medal_model12)$coefficients[2,1]
+standard_errorgdp12 = summary(Medal_model12)$coefficients[2,2]
+cigdp12 = estimategdp12 + c(-1,0, 1)*zcon*standard_errorgdp12
+
+estimatepop12 = summary(Medal_model12)$coefficients[3,1]
+standard_errorpop12 = summary(Medal_model12)$coefficients[3,2]
+cipop12 = estimatepop12 + c(-1,0, 1)*zcon*standard_errorpop12
+
+coefdf = data.frame(cigdp08, cigdp12, cipop08, cipop12)
+rownames(coefdf) = c("Min CI","Model Estimate","Max CI")
+kable(coefdf, digits = 20, col.names = c("GDP 08","GDP 12","Population 08","Population 12") , "pandoc")
+```
+
+Using the standard error and estimated provided in the $\textbf{summary()}$, we can inspect the 95% confidence interval for the estimates for the variable coefficients. Illustrated in the table above, both the 2008 and 2012 the confidence intervals for the GDP coefficient estimate are greater than 0 and the intervals for population coefficient estimate contain 0. From this we can assume that GDP has a positive impact on medals won, however population may not have an impact at all. 
+
+\newpage
+
+## Task 3: Using the regression for the 2012 medal count make a prediction for the results of 2016.
+```{r}
+predict16 = predict(Medal_model12)
+
+ggplot(medal_data, aes(x = Country, y = predict16)) +
+  geom_point(mapping = aes(color = Country)) +
+  geom_text_repel(aes(label = Country),size = 1.2, point.padding = 0.01e-06, segment.colour = aes("black"), segment.size = 0.1, min.segment.length = 0, arrow = arrow(type = "closed", length = unit(0.01,"npc")))+
+  theme(legend.position = "none")+
+  theme(axis.text.x = element_blank()) +
+  geom_smooth(method = "glm", linetype = "dashed", size=0.3, se=F)+
+  xlab("Countries in Alphabetical Order")+
+  ylab("Prediction")+
+  ggtitle("Predicted Medals for 2016 by Country") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Using the 2012 regression model we can use the $\textbf{predict()}$ function to estimate new input data for a given model. As we are using the same GDP and population data for 2008, 2012 and 2016 these predictions will be the the same exact for each country given any model, regardless of the year.
+
+We can see that the 3 highest predicted results were for the USA, China and Japan, all of which were the only countries to have been predicted to win more than 50 medals with the vast majority of countries being predicted less than 25 medals.
+
+
+## Task 4: Plot your predictions against the actual results of 2016. If the results are hard to see, use a transformation of the axes to make it these clearer. How good are the predictions? Which countries are outliers from the trend?
+
+```{r}
+ggplot(medal_data, aes(predict16,Medal2016)) +
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_point(mapping = aes(color = Country)) +
+  geom_text_repel(aes(label = Country),size = 1.2, point.padding = 0.01e-06, segment.colour = aes("black"), segment.size = 0.1, min.segment.length = 0, arrow = arrow(type = "closed", length = unit(0.01,"npc")))+
+  theme(legend.position = "none")+
+  geom_smooth(method = "glm", linetype = "dashed", size=0.3, se=F)+ 
+  xlab("Predicted")+
+  ylab("Actual")+
+  ggtitle("Predicted Medals Against Actual Medals (2016)") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Using the $\textbf{predicted()}$ values from the 2012 model in Task 3, these are plotted against the actual values of 2016  provided in the medal_data dataset using a logarithmic scale.
+
+Using this transformation in scale, the individual data points are easier to view as the vast majority countries have less than 25 medals (in truth and prediction) causing the graph to be very clustered near the origin, the logarithmic scale stretches the graph in such a way that the data is more easily visualised.
+```{r}
+diff = (medal_data$Medal2016 - predict(Medal_model12))
+summary(diff)
+
+
+upper12 = (summary(diff)[5] + 1.5*IQR(diff))
+lower12 = (summary(diff)[2] - 1.5*IQR(diff))
+
+boxplot(diff, main="Difference in Actual to Predicted Medal Count (2016)")
+statistics12 = boxplot.stats(diff)
+outliers12 = boxplot.stats(diff)[4]
+outliers12
+```
+The above boxplot has been produced by calculating the difference in actual and predicted medals for each country. We use this difference to define an upper and lower boundary for outliers as first and third quartiles plus or minus 1.5 times the inter quartile range respectively. 
+
+Plotting this as a boxplot we notice that our data has 3 outliers, utilising the $\textbf{boxplot.stats()}$ function we can see that our outliers are for countries 27, 30 and 52. This outliers have been illustrated in the graph below through using a condition to colour the non-outliers and outliers in accordance to our calculated boundaries.
+
+```{r}
+
+ggplot(medal_data, aes(predict16,Medal2016)) +
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_point(mapping = aes(color = (diff < upper12 & diff > lower12), )) +
+  geom_text_repel(aes(label = Country),size = 1.2, point.padding = 0.01e-06, segment.colour = aes("black"), segment.size = 0.1, min.segment.length = 0, arrow = arrow(type = "closed", length = unit(0.01,"npc")))+
+  theme(legend.position = "none")+
+  #theme(legend.text = element_text(size = 3, face = "bold")) +
+  geom_smooth(method = "glm", linetype = "dashed", size=0.3, se=F)+
+  xlab("Predicted")+
+  ylab("Actual")+
+  ggtitle("Predicted Medals Against Actual Medals (2016)") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+As illustrated through the use of this condition, we can observe three outliers with Britain and Russia overperforming in the games and India soley underperforming in relation to our model prediction.
+
+\newpage
+
+## Part 2 : Model Selection
+## Task 1: Fit linear regressions models for the total medal count in 2012 using: (i) Population alone; (ii) GDP alone; (iii) Population and GDP. Select the model that minimises the Akaike Information Criterion.
+
+The Akaike Information Criterion (AIC) is used as an estimator for how well a model performs in comparison to others. As the model with the lowest AIC is deemed to be the best, the AIC incorporates a trade off in the number of parameters used to maximum log-likelihood so as to penalize complex models against more simple ones (occams razor).
+```{r}
+Medal_model12Pop = glm(Medal2012 ~ Population, data = medal_data)
+summary12Pop = summary(Medal_model12Pop)
+predict16Pop = predict(Medal_model12Pop)
+
+Medal_model12Gdp = glm(Medal2012 ~ GDP, data = medal_data)
+summary12Gdp = summary(Medal_model12Gdp)
+predict16Gdp = predict(Medal_model12Gdp)
+```
+
+Using the same functions from Part 1 we can construct two more regression models for GDP and population independantly. From the 11th element in the $\textbf{summary()}$ we can read off the AIC values for each model.
+```{r}
+pop_aic = Medal_model12Pop[11]
+gdp_aic = Medal_model12Gdp[11]
+pop_and_gdp_aic = Medal_model12[11]
+
+print(paste("Population AIC:", pop_aic))
+print(paste("GDP AIC:", gdp_aic))
+print(paste("GDP and Population AIC:", pop_and_gdp_aic))
+```
+
+As we could expect given the near-zero population coeffiecient provided in Part 1, Task 1, “Population” didnot perform very well as a predictor by itself. As a result of this and because the AIC penalizes more complexmodels, the “GDP and Population” model came in close second (553) behind the “GDP” model producing the best AIC of the three (551).
+\newpage
+
+## Task 2: Use cross-validation to perform a model selection between (i) Population alone; (ii) GDP alone; (iii) Population and GDP. Does your result agree with the model selected by AIC?
+
+To implement cross validation we take a sample of our data set and test as to how our models perform when applied to many, smaller and slightly differing data sets (test sets). Each time we generate a new test set we will check how each model fits and record the frequency of which model performs the best of the three, in accordance to their log likelihood estimation.
+
+To test log likelihood we will use the $\textbf{dnorm()}$ command to evaluate the normal distribution probability density function (using our model mean and standard deviation) of the test data. As each data point of the test data is predicted well by the model, the log likelihood estimate for that data point will be larger.
+
+We then sum all the data point' estimates together for the entirity of the test set, this summation indicates which model performed the best. It is worth noting that when the original data set had only a few countries removed the "GDP and Population" model frequentially performed better than the "Population" model alone. However when sampling less countries this result was inversed. Nonetheless "GDP" alone proved to be the best all round model. This result was obtained from having performed our algorithm for 2000 iterations.
+
+```{r}
+formulas = c("Medal2012 ~ Population","Medal2012 ~ GDP","Medal2012 ~ GDP + Population")
+formula = c("Population", "GDP", "GDP and Population")
+winner = rep(NA, 2000)
+for (iteration in 1:2000){
+idx = sample(1:71, 64)
+train_data = medal_data[idx, ]
+test_data = medal_data[-idx, ]
+predictive_log_likelihood = rep(NA, length(formulas))
+for (i in 1:length(formulas)){
+current_model = glm(formula = formulas[i], data = train_data)
+sigma = sqrt(summary(current_model)$dispersion)
+ypredict_mean = predict(current_model, test_data)
+predictive_log_likelihood[i] = sum(dnorm(test_data$Medal2012, ypredict_mean, sigma, log=TRUE)) }
+winner[iteration] = formula[which.max(predictive_log_likelihood)]}
+winnerdf = data.frame(winner)
+ggplot(winnerdf, aes(x = winner)) + 
+  geom_bar(color="black", fill="white") +
+  xlab("Predicted")+
+  ylab("Actual")+
+  ggtitle("Cross Validation Best Model 67 of 71 Countries per Iteration") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r}
+winner = rep(NA, 2000)
+for (iteration in 1:2000){
+idx = sample(1:71, 50)
+train_data = medal_data[idx, ]
+test_data = medal_data[-idx, ]
+predictive_log_likelihood = rep(NA, length(formulas))
+for (i in 1:length(formulas)){
+current_model = glm(formula = formulas[i], data = train_data)
+sigma = sqrt(summary(current_model)$dispersion)
+ypredict_mean = predict(current_model, test_data)
+predictive_log_likelihood[i] = sum(dnorm(test_data$Medal2012, ypredict_mean, sigma, log=TRUE)) }
+winner[iteration] = formula[which.max(predictive_log_likelihood)]}
+winnerdf = data.frame(winner)
+ggplot(winnerdf, aes(x = winner)) + 
+  geom_bar(color="black", fill="white") +
+  xlab("Predicted")+
+  ylab("Actual")+
+  ggtitle("Cross Validation Best Model 50 of 71 Countries per Iteration (70|30 split)") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+\newpage
+
+## Task 3: Using the three fitted models from Q1, predict the results of Rio 2016. Which predicts best? Compare this result with earlier answers.
+
+Again, using the difference in actual to predicted medals we can test which model produces the most outliers (points further than 1.5 times the interquartile range outside the upper and lower quartiles). Similar to Part 1 Task 4, we will define these boundaries for our outliers below.
+```{r}
+diffPop = (medal_data$Medal2016 - predict(Medal_model12Pop))
+upper12Pop = (summary(diffPop)[5] + 1.5*IQR(diffPop))
+lower12Pop = (summary(diffPop)[2] - 1.5*IQR(diffPop))
+outliers12Pop = boxplot.stats(diffPop)[4]
+outliers12Popnum = length(outliers12Pop)
+
+
+diffGdp = (medal_data$Medal2016 - predict(Medal_model12Gdp))
+upper12Gdp = (summary(diffGdp)[5] + 1.5*IQR(diffGdp))
+lower12Gdp = (summary(diffGdp)[2] - 1.5*IQR(diffGdp))
+outliers12Gdp = boxplot.stats(diffGdp)[4]
+outliers12Gdpnum = length(outliers12Gdp)
+
+diff = (medal_data$Medal2016 - predict(Medal_model12))
+upper12 = (summary(diff)[5] + 1.5*IQR(diff))
+lower12 = (summary(diff)[2] - 1.5*IQR(diff))
+outliers12 = boxplot.stats(diff)[4]
+
+boxplot(diffPop, diffGdp, diff, names=c("Population","GDP","GDP and Population"), ylab = ("Difference in Medals"), main = "Difference in Predicted to True Medal Count for Various Models 2016")
+```
+As we can see from the above boxplots each model produces 7, 2 and3 outliers respectively.
+
+Making use of the $\textbf{boxplot.stats()}$ function we can veiw which numbers are regarded as outliers for each model.
+```{r}
+summary(diffPop)
+print(paste("The population residual outliers: ", outliers12Pop))
+```
+
+```{r}
+summary(diffGdp)
+print(paste("The population residual outliers: ", outliers12Gdp))
+```
+
+```{r}
+summary(diff)
+print(paste("The population residual outliers: ", outliers12))
+```
+These points can be represented as before on a plot of predicted medals against actual medals.
+```{r}
+ggplot(medal_data, aes(predict(Medal_model12Pop),Medal2016)) +
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_point(mapping = aes(color = (diffPop < upper12Pop & diffPop > lower12Pop), )) +
+  geom_text_repel(aes(label = Country),size = 1.2, point.padding = 0.01e-06, segment.colour = aes("black"), segment.size = 0.1, min.segment.length = 0, arrow = arrow(type = "closed", length = unit(0.01,"npc")))+
+  theme(legend.position = "none")+
+  #theme(legend.text = element_text(size = 3, face = "bold")) +
+  geom_smooth(method = "glm", linetype = "dashed", size=0.3, se=F)+
+  xlab("Predicted")+
+  ylab("Actual")+
+  ggtitle("Regression Model for Population in 2016") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(medal_data, aes(predict(Medal_model12Gdp),Medal2016)) +
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_point(mapping = aes(color = (diffGdp < upper12Gdp & diffGdp > lower12Gdp), )) +
+  geom_text_repel(aes(label = Country),size = 1.2, point.padding = 0.01e-06, segment.colour = aes("black"), segment.size = 0.1, min.segment.length = 0, arrow = arrow(type = "closed", length = unit(0.01,"npc")))+
+  theme(legend.position = "none")+
+  #theme(legend.text = element_text(size = 3, face = "bold")) +
+  geom_smooth(method = "glm", linetype = "dashed", size=0.3, se=F)+
+  xlab("Predicted")+
+  ylab("Actual")+
+  ggtitle("Regression Model for GDP in 2016") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(medal_data, aes(predict(Medal_model12),Medal2016)) +
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_point(mapping = aes(color = (diff < upper12 & diff > lower12), )) +
+  geom_text_repel(aes(label = Country),size = 1.2, point.padding = 0.01e-06, segment.colour = aes("black"), segment.size = 0.1, min.segment.length = 0, arrow = arrow(type = "closed", length = unit(0.01,"npc")))+
+  theme(legend.position = "none")+
+  #theme(legend.text = element_text(size = 3, face = "bold")) +
+  geom_smooth(method = "glm", linetype = "dashed", size=0.3, se=F)+
+  xlab("Predicted")+
+  ylab("Actual")+
+  ggtitle("Regression Model for Population and GDP in 2016") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+From checking the outliers of each model we can conclude once again that the "GDP" model outperforms the other two by producing the least outliers.
+
+\newpage
+
+Now we will perform a maximum log-likelihood estimation for each model. Similar to when we used cross validation however this time we will test the model on whole data set.
+```{r}
+predictive_log_likelihood = rep(NA, length(formulas))
+for (i in 1:length(formulas)){
+current_model = glm(formula = formulas[i], data = medal_data)
+sigma = sqrt(summary(current_model)$dispersion)
+ypredict_mean = predict(current_model, medal_data)
+predictive_log_likelihood[i] = sum(dnorm(medal_data$Medal2016, ypredict_mean, sigma, log=TRUE))
+}
+logprobdf = data.frame( models = formula,log_likelihood=predictive_log_likelihood)
+logprobdf$models = factor(logprobdf$models,levels=levels(logprobdf$models)[c(3,1,2)])
+plot(x=logprobdf$models, y=logprobdf$log_likelihood, xlab="Model", ylab="Log Probability", main="Log Likelihood Estimate of Each Model")
+```
+
+From the plot we can see that once again, similar to the Part 2 Task 1 the "GDP" model produces a slightly better result than the "GDP and Population" and far better than "Population" alone; as the higher the log-likelihood of a given model, the better is has fitted the data.
+
+In conclusion the results of the AIC, Cross-Validation, total number of outliers and log-likelihood estimation are synonomous in indicating that the "GDP" regression model performs the best among  the three models for predicting medals in Rio 2016. It is also strongly indicated across all tests that population carries little to no weight when predicting medals for Rio 2016.
